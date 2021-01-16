@@ -1,0 +1,1797 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<style>
+			canvas{
+				background: #dddddd;
+				position: fixed;/*fixed position to fix mouse offset*/
+				top: 0px;
+				left: 0px;
+			}
+		</style>
+		<script>
+			var c;//Canvas context; used to call Canvas methods
+			var cWidth, cHeight;//Canvas width and height.
+			var curkeys = [];//Stores the current keyboard state
+			var newkeys = [];//Stores keys that have been newly pressed since last update
+			var mouse_x = 0, mouse_y = 0;//current mouse pos
+			var isClicking=false;//is clicked
+			var groupspower = [];//bool variable to store each groups and if they are powered
+			groupspower[-1]=false;//if there is no object, consider it false
+			var objects = [];//a list of all objects
+			var simrunning=true;//if the game does its calculations at 20 per second
+			var currentClickEvent = "Nothing";//the event that happens when you dclick
+			var tickTimer = new timerClass(50);//timer that triggers ever 1/20th of a second
+			var showdebug = false;//when true the debug information is shown
+			//classes for logic gates
+			function superGate(){//super class for logic gates (mostly for organization)
+				this.x;//gate's x position
+				this.y;//gate's y position
+				this.rotation=0;//gate's rotation
+				this.variants;//gates number of variants (rotations)
+				this.inputGroup=[-1,-1,-1,-1];//the input groups for the gate
+				this.outputGroup=[-1,-1,-1,-1];//the output groups for the gate
+				this.willoutput=[];//if the gate will output on the next tick
+				this.img = new Image();//the gates image
+				this.type="logic";
+
+				this.draw = function(){//draw the gate
+
+				}
+				this.doNextCalc = function(){//set the willoutput for the next tick
+
+				}
+				this.doOutput = function(){//set the output group(s) to true if nessacary
+
+				}
+				this.onCompile = function(){//determine the input/output groups and store them
+
+				}
+			}
+
+			function soundTileClass(gatex,gatey){//class for sound tile
+				this.extending = superGate;
+				this.extending();//using the superGate superclass
+				this.x=gatex;
+				this.y=gatey;
+				this.variants=6;//has 1 variant (sofar)
+				this.waspowered = false;
+				this.notes = ["a","b","c","d","e","f","g"];
+				this.note = new Audio("soundtilesounds/"+this.notes[this.rotation]+".wav");
+				this.currentNote = this.notes[this.rotation];
+
+				this.draw = function(){
+					this.img.src = "soundtileimgs/soundTileImg"+this.rotation+".png";////get the image corrisponding to the rotation
+					c.drawImage(this.img,this.x,this.y,16,16);//draw the image
+					if (this.currentNote!=this.notes[this.rotation]){
+						this.note = new Audio("soundtilesounds/"+this.notes[this.rotation]+".wav");
+						this.currentNote = this.notes[this.rotation];
+					}
+				}
+				this.doNextCalc = function(){//figure out what it will do when doouput is run
+					this.willoutput[0]=false;//reset willoutput
+					if (groupspower[this.inputGroup[0]] || groupspower[this.inputGroup[1]] || groupspower[this.inputGroup[2]] || groupspower[this.inputGroup[3]]){//if NOT is true
+						if (this.waspowered == false){
+							this.willoutput[0]=true;//set willoutput
+						}
+						this.waspowered = true;
+					}else{
+						this.waspowered = false;
+					}
+				}
+				this.doOutput = function(){//actually send the output
+					if (this.willoutput[0]==true){//if is supposed to output
+						this.note.currentTime=0;//reset sound
+						this.note.play();
+						//testnote.play();
+					}
+				}
+				this.onCompile = function(){//calculate the inputs and outputs for its given rotation
+					var objidin0 = getObjIdAt(this.x,this.y-16);
+					var objidin1 = getObjIdAt(this.x,this.y+16);
+					var objidin2 = getObjIdAt(this.x-16,this.y);
+					var objidin3 = getObjIdAt(this.x+16,this.y);
+
+					//set the input and/or output group if applicable
+					if (objidin0!=-1 && objects[objidin0].constructor.name=="wireClass"){
+						this.inputGroup[0]=objects[objidin0].group;
+					}else{
+						this.inputGroup[0] = -1;
+					}
+					if (objidin1!=-1 && objects[objidin1].constructor.name=="wireClass"){
+						this.inputGroup[1]=objects[objidin1].group;
+					}else{
+						this.inputGroup[1] = -1;
+					}
+					if (objidin2!=-1 && objects[objidin2].constructor.name=="wireClass"){
+						this.inputGroup[2]=objects[objidin2].group;
+					}else{
+						this.inputGroup[2] = -1;
+					}
+					if (objidin3!=-1 && objects[objidin3].constructor.name=="wireClass"){
+						this.inputGroup[3]=objects[objidin3].group;
+					}else{
+						this.inputGroup[3] = -1;
+					}
+				}
+			}
+			function NOTGateClass(gatex,gatey){//class for not gate
+				this.extending = superGate;
+				this.extending();//using the superGate superclass
+				this.x=gatex;
+				this.y=gatey;
+				this.willoutput[0]=false;
+				this.variants=3;//has 4 variants
+				this.draw = function(){
+					this.img.src = "notgateimgs/notGate"+this.rotation+".png";//get the image corrisponding to the rotation
+					c.drawImage(this.img,this.x,this.y,16,16);//draw the image
+				}
+				this.doNextCalc = function(){//figure out what it will do when doouput is run
+					this.willoutput[0]=false;//reset willoutput
+					if (groupspower[this.inputGroup[0]]==false){//if NOT is true
+						this.willoutput[0]=true;//set willoutput
+					}
+				}
+				this.doOutput = function(){//actually send the output
+					if (this.willoutput[0]==true){//if is supposed to output
+						if (this.outputGroup[0]!=-1){//and there is an output group
+							groupspower[this.outputGroup[0]]=true;//output
+						}
+					}
+				}
+				this.onCompile = function(){//calculate the inputs and outputs for its given rotation
+					switch(this.rotation){//set the objidin and objidout for the respecitve rotation
+						case 0:
+							var objidin = getObjIdAt(this.x,this.y-16);
+							var objidout = getObjIdAt(this.x,this.y+16);
+							break;
+						case 1:
+							var objidin = getObjIdAt(this.x+16,this.y);
+							var objidout = getObjIdAt(this.x-16,this.y);
+							break;
+						case 2:
+							var objidin = getObjIdAt(this.x,this.y+16);
+							var objidout = getObjIdAt(this.x,this.y-16);
+							break;
+						case 3:
+							var objidin = getObjIdAt(this.x-16,this.y);
+							var objidout = getObjIdAt(this.x+16,this.y);
+							break;
+					}
+					//set the input and/or output group if applicable
+					if (objidin!=-1 && objects[objidin].constructor.name=="wireClass"){
+						this.inputGroup[0]=objects[objidin].group;
+					}else{
+						this.inputGroup[0] = -1;
+					}
+					if (objidout!=-1 && objects[objidout].constructor.name=="wireClass"){
+						this.outputGroup[0]=objects[objidout].group;
+					}else{
+						this.outputGroup[0] = -1;
+					}
+				}
+			}
+			function rndGateClass(gatex,gatey){//class for sound tile
+				this.extending = superGate;
+				this.extending();//using the superGate superclass
+				this.x=gatex;
+				this.y=gatey;
+				this.willoutput[0]=false;
+				this.variants=3;//has 4 variants
+				this.draw = function(){
+					this.img.src = "rndgateimgs/rndGate"+this.rotation+".png";//get the image corrisponding to the rotation
+					c.drawImage(this.img,this.x,this.y,16,16);//draw the image
+				}
+				this.doNextCalc = function(){//figure out what it will do when doouput is run
+					this.willoutput[0]=false;//reset willoutput
+					if (groupspower[this.inputGroup[0]]==true){//if input is true
+						if (getRandomInt(0,1)==1){//50/50 chance
+							this.willoutput[0]=true;//set willoutput
+						}
+					}
+				}
+				this.doOutput = function(){//actually send the output
+					if (this.willoutput[0]==true){//if is supposed to output
+						if (this.outputGroup[0]!=-1){//and there is an output group
+							groupspower[this.outputGroup[0]]=true;//output
+						}
+					}
+				}
+				this.onCompile = function(){//calculate the inputs and outputs for its given rotation
+					switch(this.rotation){//set the objidin and objidout for the respecitve rotation
+						case 0:
+							var objidin = getObjIdAt(this.x,this.y-16);
+							var objidout = getObjIdAt(this.x,this.y+16);
+							break;
+						case 1:
+							var objidin = getObjIdAt(this.x+16,this.y);
+							var objidout = getObjIdAt(this.x-16,this.y);
+							break;
+						case 2:
+							var objidin = getObjIdAt(this.x,this.y+16);
+							var objidout = getObjIdAt(this.x,this.y-16);
+							break;
+						case 3:
+							var objidin = getObjIdAt(this.x-16,this.y);
+							var objidout = getObjIdAt(this.x+16,this.y);
+							break;
+					}
+					//set the input and/or output group if applicable
+					if (objidin!=-1 && objects[objidin].constructor.name=="wireClass"){
+						this.inputGroup[0]=objects[objidin].group;
+					}else{
+						this.inputGroup[0] = -1;
+					}
+					if (objidout!=-1 && objects[objidout].constructor.name=="wireClass"){
+						this.outputGroup[0]=objects[objidout].group;
+					}else{
+						this.outputGroup[0] = -1;
+					}
+				}
+			}
+			function DiodeGateClass(gatex,gatey){//class for diode gate
+				this.extending = superGate;
+				this.extending();//using the superGate superclass
+				this.x=gatex;
+				this.y=gatey;
+				this.variants=3;//has 4 variants
+				this.willoutput[0]=false;
+				this.draw = function(){
+					this.img.src = "diodegateimgs/diodegate"+this.rotation+".png";////get the image corrisponding to the rotation
+					c.drawImage(this.img,this.x,this.y,16,16);//draw the image
+				}
+				this.doNextCalc = function(){//figure out what it will do when doouput is run
+					this.willoutput[0]=false;//reset willoutput
+					if (groupspower[this.inputGroup[0]]==true){//if input is true
+						this.willoutput[0]=true;//set willoutput
+					}
+				}
+				this.doOutput = function(){//actually send the output
+					if (this.willoutput[0]==true){//if is supposed to output
+						if (this.outputGroup[0]!=-1){//and there is an output group
+							groupspower[this.outputGroup[0]]=true;//output
+						}
+					}
+				}
+				this.onCompile = function(){//calculate the inputs and outputs for its given rotation
+					switch(this.rotation){//set the objidin and objidout for the respecitve rotation
+						case 0:
+							var objidin = getObjIdAt(this.x,this.y-16);
+							var objidout = getObjIdAt(this.x,this.y+16);
+							break;
+						case 1:
+							var objidin = getObjIdAt(this.x+16,this.y);
+							var objidout = getObjIdAt(this.x-16,this.y);
+							break;
+						case 2:
+							var objidin = getObjIdAt(this.x,this.y+16);
+							var objidout = getObjIdAt(this.x,this.y-16);
+							break;
+						case 3:
+							var objidin = getObjIdAt(this.x-16,this.y);
+							var objidout = getObjIdAt(this.x+16,this.y);
+							break;
+					}
+					//set the input and/or output group if applicable
+					if (objidin!=-1 && objects[objidin].constructor.name=="wireClass"){
+						this.inputGroup[0]=objects[objidin].group;
+					}else{
+						this.inputGroup[0] = -1;
+					}
+					if (objidout!=-1 && objects[objidout].constructor.name=="wireClass"){
+						this.outputGroup[0]=objects[objidout].group;
+					}else{
+						this.outputGroup[0] = -1;
+					}
+				}
+			}
+			function ANDGateClass(gatex,gatey){//class for AND gate
+				this.extending = superGate;
+				this.extending();//using superGate superclass
+				this.x=gatex;
+				this.y=gatey;
+				this.variants=3;//has 4 variants
+				this.willoutput[0]=false;
+
+				this.draw = function(){
+					this.img.src = "andgateimgs/andGate"+this.rotation+".png";//set the image corrisponding to its rotation
+					c.drawImage(this.img,this.x,this.y,16,16);//draw the image
+				}
+				this.doNextCalc = function(){//figure out what it will do when dooutput is run
+					this.willoutput[0]=false;//reset willoutput
+					if (groupspower[this.inputGroup[0]]==true && groupspower[this.inputGroup[1]]==true){//if AND is true
+						this.willoutput[0]=true;//set willoutput to true
+					}
+
+				}
+				this.doOutput = function(){//called when a tick is run
+					if (this.willoutput[0]==true){//if it is supposed to output
+						if (this.outputGroup[0]!=-1){//if there is an output group
+							groupspower[this.outputGroup[0]]=true;//output
+						}
+					}
+				}
+				this.onCompile = function(){//calculate the inputs and outputs for its given rotation
+					switch(this.rotation){//set the objidin and objidout for the respecitve rotation
+						case 0:
+							var objidin0 = getObjIdAt(this.x+16,this.y);
+							var objidin1 = getObjIdAt(this.x-16,this.y);
+							var objidout = getObjIdAt(this.x,this.y+16);
+							break;
+						case 1:
+							var objidin0 = getObjIdAt(this.x,this.y+16);
+							var objidin1 = getObjIdAt(this.x,this.y-16);
+							var objidout = getObjIdAt(this.x-16,this.y);
+							break;D
+						case 2:
+							var objidin0 = getObjIdAt(this.x+16,this.y);
+							var objidin1 = getObjIdAt(this.x-16,this.y);
+							var objidout = getObjIdAt(this.x,this.y-16);
+							break;
+						case 3:
+							var objidin0 = getObjIdAt(this.x,this.y+16);
+							var objidin1 = getObjIdAt(this.x,this.y-16);
+							var objidout = getObjIdAt(this.x+16,this.y);
+							break;
+					}
+					//set the input and/or output group if necessary
+					if (objidin0!=-1 && objects[objidin0].constructor.name=="wireClass"){
+						this.inputGroup[0]=objects[objidin0].group;
+					}else{
+						this.inputGroup[0] = -1;
+					}
+					if (objidin1!=-1 && objects[objidin1].constructor.name=="wireClass"){
+						this.inputGroup[1]=objects[objidin1].group;
+					}else{
+						this.inputGroup[1] = -1;
+					}
+					if (objidout!=-1 && objects[objidout].constructor.name=="wireClass"){
+						this.outputGroup[0]=objects[objidout].group;
+					}else{
+						this.outputGroup[0] = -1;
+					}
+				}
+			}
+			function NANDGateClass(gatex,gatey){//class for NAND gate
+				this.extending = superGate;
+				this.extending();//using superGate superclass
+				this.x=gatex;
+				this.y=gatey;
+				this.variants=3;//has 4 variants
+				this.willoutput[0]=false;
+
+				this.draw = function(){
+					this.img.src = "nandgateimgs/nandGate"+this.rotation+".png";//set the image corrisponding to its rotation
+					c.drawImage(this.img,this.x,this.y,16,16);//draw the image
+				}
+				this.doNextCalc = function(){//figure out what it will do when dooutput is run
+					this.willoutput[0]=false;//reset willoutput
+					if (groupspower[this.inputGroup[0]]==false || groupspower[this.inputGroup[1]]==false){//if NAND is true
+						this.willoutput[0]=true;//set willoutput to true
+					}
+
+				}
+				this.doOutput = function(){//called when a tick is run
+					if (this.willoutput[0]==true){//if it is supposed to output
+						if (this.outputGroup[0]!=-1){//if there is an output group
+							groupspower[this.outputGroup[0]]=true;//output
+						}
+					}
+				}
+				this.onCompile = function(){//calculate the inputs and outputs for its given rotation
+					switch(this.rotation){//set the objidin and objidout for the respecitve rotation
+						case 0:
+							var objidin0 = getObjIdAt(this.x+16,this.y);
+							var objidin1 = getObjIdAt(this.x-16,this.y);
+							var objidout = getObjIdAt(this.x,this.y+16);
+							break;
+						case 1:
+							var objidin0 = getObjIdAt(this.x,this.y+16);
+							var objidin1 = getObjIdAt(this.x,this.y-16);
+							var objidout = getObjIdAt(this.x-16,this.y);
+							break;D
+						case 2:
+							var objidin0 = getObjIdAt(this.x+16,this.y);
+							var objidin1 = getObjIdAt(this.x-16,this.y);
+							var objidout = getObjIdAt(this.x,this.y-16);
+							break;
+						case 3:
+							var objidin0 = getObjIdAt(this.x,this.y+16);
+							var objidin1 = getObjIdAt(this.x,this.y-16);
+							var objidout = getObjIdAt(this.x+16,this.y);
+							break;
+					}
+					//set the input and/or output group if necessary
+					if (objidin0!=-1 && objects[objidin0].constructor.name=="wireClass"){
+						this.inputGroup[0]=objects[objidin0].group;
+					}else{
+						this.inputGroup[0] = -1;
+					}
+					if (objidin1!=-1 && objects[objidin1].constructor.name=="wireClass"){
+						this.inputGroup[1]=objects[objidin1].group;
+					}else{
+						this.inputGroup[1] = -1;
+					}
+					if (objidout!=-1 && objects[objidout].constructor.name=="wireClass"){
+						this.outputGroup[0]=objects[objidout].group;
+					}else{
+						this.outputGroup[0] = -1;
+					}
+				}
+			}
+			function NORGateClass(gatex,gatey){//class for NOR gate
+				this.extending = superGate;
+				this.extending();//using superGate superclass
+				this.x=gatex;
+				this.y=gatey;
+				this.variants=3;//has 4 variants
+				this.willoutput[0]=false;
+
+				this.draw = function(){
+					this.img.src = "norgateimgs/norGate"+this.rotation+".png";//set the image corrisponding to its rotation
+					c.drawImage(this.img,this.x,this.y,16,16);//draw the image
+				}
+				this.doNextCalc = function(){//figure out what it will do when dooutput is run
+					this.willoutput[0]=false;//reset willoutput
+					if (groupspower[this.inputGroup[0]]==false && groupspower[this.inputGroup[1]]==false){//if NOR is true
+						this.willoutput[0]=true;//set willoutput to true
+					}
+				}
+				this.doOutput = function(){//called when a tick is run
+					if (this.willoutput[0]==true){//if it is supposed to output
+						if (this.outputGroup[0]!=-1){//if there is an output group
+							groupspower[this.outputGroup[0]]=true;//output
+						}
+					}
+				}
+				this.onCompile = function(){//calculate the inputs and outputs for its given rotation
+					switch(this.rotation){//set the objidin and objidout for the respecitve rotation
+						case 0:
+							var objidin0 = getObjIdAt(this.x+16,this.y);
+							var objidin1 = getObjIdAt(this.x-16,this.y);
+							var objidout = getObjIdAt(this.x,this.y+16);
+							break;
+						case 1:
+							var objidin0 = getObjIdAt(this.x,this.y+16);
+							var objidin1 = getObjIdAt(this.x,this.y-16);
+							var objidout = getObjIdAt(this.x-16,this.y);
+							break;
+						case 2:
+							var objidin0 = getObjIdAt(this.x+16,this.y);
+							var objidin1 = getObjIdAt(this.x-16,this.y);
+							var objidout = getObjIdAt(this.x,this.y-16);
+							break;
+						case 3:
+							var objidin0 = getObjIdAt(this.x,this.y+16);
+							var objidin1 = getObjIdAt(this.x,this.y-16);
+							var objidout = getObjIdAt(this.x+16,this.y);
+							break;
+					}
+					//set the input and/or output group if necessary
+					if (objidin0!=-1 && objects[objidin0].constructor.name=="wireClass"){
+						this.inputGroup[0]=objects[objidin0].group;
+					}else{
+						this.inputGroup[0] = -1;
+					}
+					if (objidin1!=-1 && objects[objidin1].constructor.name=="wireClass"){
+						this.inputGroup[1]=objects[objidin1].group;
+					}else{
+						this.inputGroup[1] = -1;
+					}
+					if (objidout!=-1 && objects[objidout].constructor.name=="wireClass"){
+						this.outputGroup[0]=objects[objidout].group;
+					}else{
+						this.outputGroup[0] = -1;
+					}
+				}
+			}
+			function ORGateClass(gatex,gatey){//class for OR gate
+				this.extending = superGate;
+				this.extending();//using superGate superclass
+				this.x=gatex;
+				this.y=gatey;
+				this.variants=3;//has 4 variants
+				this.willoutput[0]=false;
+
+				this.draw = function(){
+					this.img.src = "orgateimgs/orGate"+this.rotation+".png";//set the image corrisponding to its rotation
+					c.drawImage(this.img,this.x,this.y,16,16);//draw the image
+				}
+				this.doNextCalc = function(){//figure out what it will do when dooutput is run
+					this.willoutput[0]=false;//reset willoutput
+					if (groupspower[this.inputGroup[0]]==true || groupspower[this.inputGroup[1]]==true){//if OR is true
+						this.willoutput[0]=true;//set willoutput to true
+					}
+
+				}
+				this.doOutput = function(){//called when a tick is run
+					if (this.willoutput[0]==true){//if it is supposed to output
+						if (this.outputGroup[0]!=-1){//if there is an output group
+							groupspower[this.outputGroup[0]]=true;//output
+						}
+					}
+				}
+				this.onCompile = function(){//calculate the inputs and outputs for its given rotation
+					switch(this.rotation){//set the objidin and objidout for the respecitve rotation
+						case 0:
+							var objidin0 = getObjIdAt(this.x+16,this.y);
+							var objidin1 = getObjIdAt(this.x-16,this.y);
+							var objidout = getObjIdAt(this.x,this.y+16);
+							break;
+						case 1:
+							var objidin0 = getObjIdAt(this.x,this.y+16);
+							var objidin1 = getObjIdAt(this.x,this.y-16);
+							var objidout = getObjIdAt(this.x-16,this.y);
+							break;
+						case 2:
+							var objidin0 = getObjIdAt(this.x+16,this.y);
+							var objidin1 = getObjIdAt(this.x-16,this.y);
+							var objidout = getObjIdAt(this.x,this.y-16);
+							break;
+						case 3:
+							var objidin0 = getObjIdAt(this.x,this.y+16);
+							var objidin1 = getObjIdAt(this.x,this.y-16);
+							var objidout = getObjIdAt(this.x+16,this.y);
+							break;
+					}
+					//set the input and/or output group if necessary
+					if (objidin0!=-1 && objects[objidin0].constructor.name=="wireClass"){
+						this.inputGroup[0]=objects[objidin0].group;
+					}else{
+						this.inputGroup[0] = -1;
+					}
+					if (objidin1!=-1 && objects[objidin1].constructor.name=="wireClass"){
+						this.inputGroup[1]=objects[objidin1].group;
+					}else{
+						this.inputGroup[0] = -1;
+					}
+					if (objidout!=-1 && objects[objidout].constructor.name=="wireClass"){
+						this.outputGroup[0]=objects[objidout].group;
+					}else{
+						this.outputGroup[0] = -1;
+					}
+				}
+			}
+			function XNORGateClass(gatex,gatey){//class for OR gate
+				this.extending = superGate;
+				this.extending();//using superGate superclass
+				this.x=gatex;
+				this.y=gatey;
+				this.variants=3;//has 4 variants
+				this.willoutput[0]=false;
+
+				this.draw = function(){
+					this.img.src = "xnorgateimgs/xnorGate"+this.rotation+".png";//set the image corrisponding to its rotation
+					c.drawImage(this.img,this.x,this.y,16,16);//draw the image
+				}
+				this.doNextCalc = function(){//figure out what it will do when dooutput is run
+					this.willoutput[0]=false;//reset willoutput
+					if (groupspower[this.inputGroup[0]]==groupspower[this.inputGroup[1]]){//if XNOR is true
+						this.willoutput[0]=true;//set willoutput to true
+					}
+
+				}
+				this.doOutput = function(){//called when a tick is run
+					if (this.willoutput[0]==true){//if it is supposed to output
+						if (this.outputGroup[0]!=-1){//if there is an output group
+							groupspower[this.outputGroup[0]]=true;//output
+						}
+					}
+				}
+				this.onCompile = function(){//calculate the inputs and outputs for its given rotation
+					switch(this.rotation){//set the objidin and objidout for the respecitve rotation
+						case 0:
+							var objidin0 = getObjIdAt(this.x+16,this.y);
+							var objidin1 = getObjIdAt(this.x-16,this.y);
+							var objidout = getObjIdAt(this.x,this.y+16);
+							break;
+						case 1:
+							var objidin0 = getObjIdAt(this.x,this.y+16);
+							var objidin1 = getObjIdAt(this.x,this.y-16);
+							var objidout = getObjIdAt(this.x-16,this.y);
+							break;
+						case 2:
+							var objidin0 = getObjIdAt(this.x+16,this.y);
+							var objidin1 = getObjIdAt(this.x-16,this.y);
+							var objidout = getObjIdAt(this.x,this.y-16);
+							break;
+						case 3:
+							var objidin0 = getObjIdAt(this.x,this.y+16);
+							var objidin1 = getObjIdAt(this.x,this.y-16);
+							var objidout = getObjIdAt(this.x+16,this.y);
+							break;
+					}
+					//set the input and/or output group if necessary
+					if (objidin0!=-1 && objects[objidin0].constructor.name=="wireClass"){
+						this.inputGroup[0]=objects[objidin0].group;
+					}else{
+						this.inputGroup[0] = -1;
+					}
+					if (objidin1!=-1 && objects[objidin1].constructor.name=="wireClass"){
+						this.inputGroup[1]=objects[objidin1].group;
+					}else{
+						this.inputGroup[0] = -1;
+					}
+					if (objidout!=-1 && objects[objidout].constructor.name=="wireClass"){
+						this.outputGroup[0]=objects[objidout].group;
+					}else{
+						this.outputGroup[0] = -1;
+					}
+				}
+			}
+			function XORGateClass(gatex,gatey){//class for OR gate
+				this.extending = superGate;
+				this.extending();//using superGate superclass
+				this.x=gatex;
+				this.y=gatey;
+				this.variants=3;//has 4 variants
+				this.willoutput[0]=false;
+
+				this.draw = function(){
+					this.img.src = "xorgateimgs/xorGate"+this.rotation+".png";//set the image corrisponding to its rotation
+					c.drawImage(this.img,this.x,this.y,16,16);//draw the image
+				}
+				this.doNextCalc = function(){//figure out what it will do when dooutput is run
+					this.willoutput[0]=false;//reset willoutput
+					if (!groupspower[this.inputGroup[0]]==groupspower[this.inputGroup[1]]){//if XOR is true
+						this.willoutput[0]=true;//set willoutput to true
+					}
+
+				}
+				this.doOutput = function(){//called when a tick is run
+					if (this.willoutput[0]==true){//if it is supposed to output
+						if (this.outputGroup[0]!=-1){//if there is an output group
+							groupspower[this.outputGroup[0]]=true;//output
+						}
+					}
+				}
+				this.onCompile = function(){//calculate the inputs and outputs for its given rotation
+					switch(this.rotation){//set the objidin and objidout for the respecitve rotation
+						case 0:
+							var objidin0 = getObjIdAt(this.x+16,this.y);
+							var objidin1 = getObjIdAt(this.x-16,this.y);
+							var objidout = getObjIdAt(this.x,this.y+16);
+							break;
+						case 1:
+							var objidin0 = getObjIdAt(this.x,this.y+16);
+							var objidin1 = getObjIdAt(this.x,this.y-16);
+							var objidout = getObjIdAt(this.x-16,this.y);
+							break;
+						case 2:
+							var objidin0 = getObjIdAt(this.x+16,this.y);
+							var objidin1 = getObjIdAt(this.x-16,this.y);
+							var objidout = getObjIdAt(this.x,this.y-16);
+							break;
+						case 3:
+							var objidin0 = getObjIdAt(this.x,this.y+16);
+							var objidin1 = getObjIdAt(this.x,this.y-16);
+							var objidout = getObjIdAt(this.x+16,this.y);
+							break;
+					}
+					//set the input and/or output group if necessary
+					if (objidin0!=-1 && objects[objidin0].constructor.name=="wireClass"){
+						this.inputGroup[0]=objects[objidin0].group;
+					}else{
+						this.inputGroup[0] = -1;
+					}
+					if (objidin1!=-1 && objects[objidin1].constructor.name=="wireClass"){
+						this.inputGroup[1]=objects[objidin1].group;
+					}else{
+						this.inputGroup[0] = -1;
+					}
+					if (objidout!=-1 && objects[objidout].constructor.name=="wireClass"){
+						this.outputGroup[0]=objects[objidout].group;
+					}else{
+						this.outputGroup[0] = -1;
+					}
+				}
+			}
+
+			//classes wire objects
+			function wireClass(wireX,wireY){
+				this.x=wireX;
+				this.y=wireY;
+				this.powered=false;
+				this.group=-1;//set group to -1(none)
+				this.type="wire";//wire
+
+				this.draw = function(){
+					this.powered = groupspower[this.group];//set powered to the state of its group
+
+					if (this.powered==true){//if it is powered
+						c.fillStyle="rgb(255,0,0)";//set draw color ot red
+					}
+					c.fillRect(this.x,this.y,16,16);//draw square
+					if (showdebug){
+						c.fillStyle="rgb(255, 255, 255)";//DEBUG
+						c.fillText(this.group,this.x,this.y+8);//DEBUG
+					}
+					c.fillStyle="rgb(0,0,0)";//reset draw color
+				}
+			}
+			function crossGateClass(gatex,gatey){
+				this.x=gatex;
+				this.y=gatey;
+				this.img=new Image();
+				this.type="wire";
+				this.img.src="crossGate.png";
+				this.draw = function(){
+					c.drawImage(this.img,this.x,this.y,16,16);//draw image
+				}
+			}
+
+			//classes for other
+			function TswitchClass(TswitchX,TswitchY){//class for switch
+				this.x=TswitchX;
+				this.y=TswitchY;
+				this.rotation=0;
+				this.variants=3;//
+				this.outputGroup=-1;
+				this.willoutput=false;
+				this.isOn=false;
+				this.img = new Image();
+				this.img.src = "SwitchOff.png";
+				this.type="logic";
+
+				this.draw = function(){
+					if (this.isOn==false){
+						this.img.src="switchimgs/SwitchOff"+this.rotation+".png";
+					}else{
+						this.img.src="switchimgs/SwitchOn"+this.rotation+".png";
+					}
+					c.drawImage(this.img,this.x,this.y,16,16);
+					/*c.fillStyle="rgb(255, 255, 255)";
+					c.fillText(this.outputGroup,this.x,this.y+8);//DEBUG
+					c.fillStyle="rgb(0,0,0)";*/
+				}
+				this.doNextCalc = function(){//figure out what it will when needed
+					this.willoutput=false;
+					if (this.isOn==true){
+						this.willoutput=true;
+					}
+				}
+
+				this.doOutput = function(){//actually send the output
+					if (this.willoutput==true){
+						if (this.outputGroup!=-1){
+							groupspower[this.outputGroup]=true;
+						}
+					}
+				}
+
+				this.onCompile = function(){
+					switch(this.rotation){//the appropriate object for the direction of the switch
+						case 0://up
+							var objid = getObjIdAt(this.x,this.y-16);
+							break;
+						case 1://right
+							var objid = getObjIdAt(this.x+16,this.y);
+							break;
+						case 2://down
+							var objid = getObjIdAt(this.x,this.y+16);
+							break;
+						case 3://left
+							var objid = getObjIdAt(this.x-16,this.y);
+							break;
+					}
+					//set the output group if necessary
+					if (objid!=-1 && objects[objid].constructor.name=="wireClass"){
+						this.outputGroup = objects[objid].group;
+					}else{
+						this.outputGroup = -1;
+					}
+				}
+			}
+
+			//classes for the buttons
+			function superButton(){//super class for the menu buttons (mostly for organization)
+				this.x;//buttons x position
+				this.y;//buttons y position
+				this.img=new Image();//buttons image
+				this.type="button";
+				this.name = "";
+				this.description = "";
+				this.hotkey = -1;
+
+				this.clickEvent = function(){
+
+				}
+
+				this.draw = function(){
+
+				}
+
+				this.exec = function(){
+
+				}
+
+				this.drawTooltip = function(){//draw the centered popup when mousing over
+					c.globalAlpha = 0.7;
+					c.fillRect(cWidth/2-(3*this.description.length),0,this.description.length*6,48);
+					c.globalAlpha = 1;
+					c.font="10px Courier New";
+					c.fillStyle="rgb(255,255,255)";
+					c.fillText(this.description,cWidth/2-(3*this.description.length),32);
+					c.fillText(this.name,cWidth/2-(3*this.name.length),16);
+					c.fillStyle="rgb(0,0,0)";
+				}
+
+				this.doHotkey = function(){//HOTKEY START
+					if (newkeys[hotkey]){
+
+					}
+				}
+			}
+
+			function destroyButtonClass(buttonx,buttony){//destroy button
+				this.extending = superButton;
+				this.extending();//using the superGate superclass
+				this.x=buttonx;
+				this.y=buttony;
+				this.img.src = "deleteimg.png";
+				this.name="Destroy";
+				this.description="Click on an object to remove it.";
+
+				this.clickEvent = function(){
+					currentClickEvent="Destroying";
+				}
+				this.draw = function(){
+					c.drawImage(this.img,this.x,this.y,32,32);
+					if (currentClickEvent=="Destroying"){
+						c.globalAlpha=0.5;
+						c.fillRect(this.x,this.y,32,32);
+						c.globalAlpha=1;
+					}
+				}
+
+				this.exec = function(){
+					if (isClicking==true){
+						var mposxrnd16 = Math.floor(mouse_x/16)*16;
+						var mposyrnd16 = Math.floor(mouse_y/16)*16;
+						var objid = getObjIdAt(mposxrnd16,mposyrnd16);
+						if (mouse_x<cWidth-32){
+							if (currentClickEvent=="Destroying"){
+								if (objid!=-1){
+									objects.splice(objid,1);
+								}
+							}
+						}
+					}
+				}
+			}
+			function placeWireButtonClass(buttonx,buttony){//place wire button
+				this.extending = superButton;
+				this.extending();//using the superGate superclass
+				this.x=buttonx;
+				this.y=buttony;
+				this.img.src = "wire.png";
+				this.name = "Wire";
+				this.description = "Moves a signal between circuts, can be used as an input and output.";
+
+				this.clickEvent = function(){
+					currentClickEvent="PlacingWire";
+				}
+				this.draw = function(){
+					c.drawImage(this.img,this.x,this.y,32,32);
+					//green +
+					c.fillStyle="rgb(93, 255, 0)";
+					c.fillRect(this.x+22,this.y+25,8,2);
+					c.fillRect(this.x+25,this.y+22,2,8);
+					c.fillStyle="rgb(0,0,0)";
+
+					if (currentClickEvent=="PlacingWire"){
+						c.globalAlpha=0.5;
+						c.fillRect(this.x,this.y,32,32);
+						c.globalAlpha=1;
+					}
+				}
+				this.exec = function(){
+					if (isClicking==true){
+						var mposxrnd16 = Math.floor(mouse_x/16)*16;
+						var mposyrnd16 = Math.floor(mouse_y/16)*16;
+						var objid = getObjIdAt(mposxrnd16,mposyrnd16);
+						if (mouse_x<cWidth-32){
+							if (currentClickEvent=="PlacingWire"){
+								if (objid==-1){
+									objects[objects.length] = new wireClass(mposxrnd16,mposyrnd16);
+								}
+							}
+						}
+					}
+				}
+			}
+			function placeSwitchButtonClass(buttonx,buttony){//place switch button
+				this.extending = superButton;
+				this.extending();//using the superGate superclass
+				this.x=buttonx;
+				this.y=buttony;
+				this.img.src = "switchimgs/SwitchOff0.png";
+				this.name = "Switch";
+				this.description="Can be clicked on to turn off or on.";
+
+				this.clickEvent = function(){
+					currentClickEvent="PlacingSwitch";
+				}
+				this.draw = function(){
+					c.drawImage(this.img,this.x,this.y,32,32);
+					//green +
+					c.fillStyle="rgb(93, 255, 0)";
+					c.fillRect(this.x+22,this.y+25,8,2);
+					c.fillRect(this.x+25,this.y+22,2,8);
+					c.fillStyle="rgb(0,0,0)";
+
+					if (currentClickEvent=="PlacingSwitch"){
+						c.globalAlpha=0.5;
+						c.fillRect(this.x,this.y,32,32);
+						c.globalAlpha=1;
+
+					}
+				}
+
+				this.exec = function(){
+					if (isClicking==true){
+						var mposxrnd16 = Math.floor(mouse_x/16)*16;
+						var mposyrnd16 = Math.floor(mouse_y/16)*16;
+						var objid = getObjIdAt(mposxrnd16,mposyrnd16);
+						if (mouse_x<cWidth-32){
+							if (currentClickEvent=="PlacingSwitch"){
+								if (objid==-1){
+									objects[objects.length] = new TswitchClass(mposxrnd16,mposyrnd16);
+								}
+							}
+						}
+					}
+				}
+			}
+			function RTsimbuttonclass(buttonx,buttony){//button to run a 20 ticks per second
+				this.extending = superButton;
+				this.extending();//using the superGate superclass
+				this.x=buttonx;
+				this.y=buttony;
+				this.name = "Status button";
+				this.description = "Can be clicked to toggle the state of the simulation from off to on or on to off.";
+
+				this.clickEvent = function(){
+					simrunning=!simrunning;
+				}
+				this.draw = function(){
+					c.drawImage(this.img,this.x,this.y,32,32);
+					if (simrunning==true){
+						this.img.src = "stopsim.png";
+					}else{
+						this.img.src = "startsim.png";
+					}
+				}
+				this.exec = function(){//just here to prevent errors
+
+				}
+			}
+			function oneTickbuttonclass(buttonx,buttony){//button to run one tick
+				this.extending = superButton;
+				this.extending();//using the superGate superclass
+				this.x=buttonx;
+				this.y=buttony;
+				this.img.src = "onetick.png";
+				this.name = "One tick button";
+				this.description = "Click to advance the simulation by one tick (1\\20th of a second).";
+
+				this.clickEvent = function(){
+					if (simrunning==false){
+						compile();
+						runTick();
+					}
+				}
+				this.draw = function(){
+					c.drawImage(this.img,this.x,this.y,32,32);
+				}
+				this.exec = function(){//just here to prevent errors
+
+				}
+			}
+			function placeCrossGateButton(buttonx,buttony){//place cross gate button
+				this.extending = superButton;
+				this.extending();//using the superGate superclass
+				this.x=buttonx;
+				this.y=buttony;
+				this.img.src = "crossGate.png";
+				this.name = "Cross";
+				this.description = "Used to cross two wires over each other without delay.";
+
+				this.clickEvent = function(){
+					currentClickEvent="PlacingCrossGate";
+				}
+				this.draw = function(){
+					c.drawImage(this.img,this.x,this.y,32,32);
+					//green +
+					c.fillStyle="rgb(93, 255, 0)";
+					c.fillRect(this.x+22,this.y+25,8,2);
+					c.fillRect(this.x+25,this.y+22,2,8);
+					c.fillStyle="rgb(0,0,0)";
+					if (currentClickEvent=="PlacingCrossGate"){
+						c.globalAlpha=0.5;
+						c.fillRect(this.x,this.y,32,32);
+						c.globalAlpha=1;
+					}
+				}
+				this.exec = function(){
+					if (isClicking==true){
+						var mposxrnd16 = Math.floor(mouse_x/16)*16;
+						var mposyrnd16 = Math.floor(mouse_y/16)*16;
+						var objid = getObjIdAt(mposxrnd16,mposyrnd16);
+						if (mouse_x<cWidth-32){
+							if (currentClickEvent=="PlacingCrossGate"){
+								if (objid==-1){
+									objects[objects.length] = new crossGateClass(mposxrnd16,mposyrnd16);
+								}
+							}
+						}
+					}
+				}
+			}
+			function placeNotGateButton(buttonx,buttony){//place not gate button
+				this.extending = superButton;
+				this.extending();//using the superGate superclass
+				this.x=buttonx;
+				this.y=buttony;
+				this.img.src = "notgateimgs/notGate0.png";
+				this.name = "NOT gate";
+				this.description = "Returns true if the input is false.";
+
+				this.clickEvent = function(){
+					currentClickEvent="PlacingNotGate";
+				}
+				this.draw = function(){
+					c.drawImage(this.img,this.x,this.y,32,32);
+					//green +
+					c.fillStyle="rgb(93, 255, 0)";
+					c.fillRect(this.x+22,this.y+25,8,2);
+					c.fillRect(this.x+25,this.y+22,2,8);
+					c.fillStyle="rgb(0,0,0)";
+					if (currentClickEvent=="PlacingNotGate"){
+						c.globalAlpha=0.5;
+						c.fillRect(this.x,this.y,32,32);
+						c.globalAlpha=1;
+					}
+				}
+				this.exec = function(){
+					if (isClicking==true){
+						var mposxrnd16 = Math.floor(mouse_x/16)*16;
+						var mposyrnd16 = Math.floor(mouse_y/16)*16;
+						var objid = getObjIdAt(mposxrnd16,mposyrnd16);
+						if (mouse_x<cWidth-32){
+							if (currentClickEvent=="PlacingNotGate"){
+								if (objid==-1){
+									objects[objects.length] = new NOTGateClass(mposxrnd16,mposyrnd16);
+								}
+							}
+						}
+					}
+				}
+			}
+			function placeNorGateButton(buttonx,buttony){//place nor gate button
+				this.extending = superButton;
+				this.extending();//using the superGate superclass
+				this.x=buttonx;
+				this.y=buttony;
+				this.img.src = "norgateimgs/norGate0.png";
+				this.name = "NOR gate";
+				this.description = "Returns true if both inputs are false.";
+
+				this.clickEvent = function(){
+					currentClickEvent="PlacingNorGate";
+				}
+				this.draw = function(){
+					c.drawImage(this.img,this.x,this.y,32,32);
+					//green +
+					c.fillStyle="rgb(93, 255, 0)";
+					c.fillRect(this.x+22,this.y+25,8,2);
+					c.fillRect(this.x+25,this.y+22,2,8);
+					c.fillStyle="rgb(0,0,0)";
+					if (currentClickEvent=="PlacingNorGate"){
+						c.globalAlpha=0.5;
+						c.fillRect(this.x,this.y,32,32);
+						c.globalAlpha=1;
+					}
+				}
+				this.exec = function(){
+					if (isClicking==true){
+						var mposxrnd16 = Math.floor(mouse_x/16)*16;
+						var mposyrnd16 = Math.floor(mouse_y/16)*16;
+						var objid = getObjIdAt(mposxrnd16,mposyrnd16);
+						if (mouse_x<cWidth-32){
+							if (currentClickEvent=="PlacingNorGate"){
+								if (objid==-1){
+									objects[objects.length] = new NORGateClass(mposxrnd16,mposyrnd16);
+								}
+							}
+						}
+					}
+				}
+			}
+			function placeRndGateButton(buttonx,buttony){//place rnd gate button
+				this.extending = superButton;
+				this.extending();//using the superGate superclass
+				this.x=buttonx;
+				this.y=buttony;
+				this.img.src = "rndgateimgs/rndGate0.png";
+				this.name = "Random Gate";
+				this.description = "Returns true 50% of the time when input is true.";
+
+				this.clickEvent = function(){
+					currentClickEvent="PlacingRndGate";
+				}
+				this.draw = function(){
+					c.drawImage(this.img,this.x,this.y,32,32);
+					//green +
+					c.fillStyle="rgb(93, 255, 0)";
+					c.fillRect(this.x+22,this.y+25,8,2);
+					c.fillRect(this.x+25,this.y+22,2,8);
+					c.fillStyle="rgb(0,0,0)";
+					if (currentClickEvent=="PlacingRndGate"){
+						c.globalAlpha=0.5;
+						c.fillRect(this.x,this.y,32,32);
+						c.globalAlpha=1;
+					}
+				}
+				this.exec = function(){
+					if (isClicking==true){
+						var mposxrnd16 = Math.floor(mouse_x/16)*16;
+						var mposyrnd16 = Math.floor(mouse_y/16)*16;
+						var objid = getObjIdAt(mposxrnd16,mposyrnd16);
+						if (mouse_x<cWidth-32){
+							if (currentClickEvent=="PlacingRndGate"){
+								if (objid==-1){
+									objects[objects.length] = new rndGateClass(mposxrnd16,mposyrnd16);
+								}
+							}
+						}
+					}
+				}
+			}
+			function placeDiodeGateButton(buttonx,buttony){//place diode gate button
+				this.extending = superButton;
+				this.extending();//using the superGate superclass
+				this.x=buttonx;
+				this.y=buttony;
+				this.img.src = "diodegateimgs/diodegate0.png";
+				this.name = "Diode";
+				this.description = "Only returns true if the input is true.";
+
+				this.clickEvent = function(){
+					currentClickEvent="PlacingDiodeGate";
+				}
+				this.draw = function(){
+					c.drawImage(this.img,this.x,this.y,32,32);
+					//green +
+					c.fillStyle="rgb(93, 255, 0)";
+					c.fillRect(this.x+22,this.y+25,8,2);
+					c.fillRect(this.x+25,this.y+22,2,8);
+					c.fillStyle="rgb(0,0,0)";
+					if (currentClickEvent=="PlacingDiodeGate"){
+						c.globalAlpha=0.5;
+						c.fillRect(this.x,this.y,32,32);
+						c.globalAlpha=1;
+					}
+				}
+				this.exec = function(){
+					if (isClicking==true){
+						var mposxrnd16 = Math.floor(mouse_x/16)*16;
+						var mposyrnd16 = Math.floor(mouse_y/16)*16;
+						var objid = getObjIdAt(mposxrnd16,mposyrnd16);
+						if (mouse_x<cWidth-32){
+							if (currentClickEvent=="PlacingDiodeGate"){
+								if (objid==-1){
+									objects[objects.length] = new DiodeGateClass(mposxrnd16,mposyrnd16);
+								}
+							}
+						}
+					}
+				}
+			}
+			function placeAndGateButton(buttonx,buttony){//place and gate button
+				this.extending = superButton;
+				this.extending();//using the superGate superclass
+				this.x=buttonx;
+				this.y=buttony;
+				this.img.src = "andgateimgs/andGate0.png";
+				this.name = "AND gate";
+				this.description = "Returns true if both inputs are true.";
+
+				this.clickEvent = function(){
+					currentClickEvent="PlacingAndGate";
+				}
+				this.draw = function(){
+					c.drawImage(this.img,this.x,this.y,32,32);
+					//green +
+					c.fillStyle="rgb(93, 255, 0)";
+					c.fillRect(this.x+22,this.y+25,8,2);
+					c.fillRect(this.x+25,this.y+22,2,8);
+					c.fillStyle="rgb(0,0,0)";
+					if (currentClickEvent=="PlacingAndGate"){
+						c.globalAlpha=0.5;
+						c.fillRect(this.x,this.y,32,32);
+						c.globalAlpha=1;
+					}
+				}
+				this.exec = function(){
+					if (isClicking==true){
+						var mposxrnd16 = Math.floor(mouse_x/16)*16;
+						var mposyrnd16 = Math.floor(mouse_y/16)*16;
+						var objid = getObjIdAt(mposxrnd16,mposyrnd16);
+						if (mouse_x<cWidth-32){
+							if (currentClickEvent=="PlacingAndGate"){
+								if (objid==-1){
+									objects[objects.length] = new ANDGateClass(mposxrnd16,mposyrnd16);
+								}
+							}
+						}
+					}
+				}
+			}
+			function placeNandGateButton(buttonx,buttony){//place nand gate button
+				this.extending = superButton;
+				this.extending();//using the superGate superclass
+				this.x=buttonx;
+				this.y=buttony;
+				this.img.src = "nandgateimgs/nandGate0.png";
+				this.name = "NAND gate";
+				this.description = "Returns true unless both inputs are true.";
+
+				this.clickEvent = function(){
+					currentClickEvent="PlacingNandGate";
+				}
+				this.draw = function(){
+					c.drawImage(this.img,this.x,this.y,32,32);
+					//green +
+					c.fillStyle="rgb(93, 255, 0)";
+					c.fillRect(this.x+22,this.y+25,8,2);
+					c.fillRect(this.x+25,this.y+22,2,8);
+					c.fillStyle="rgb(0,0,0)";
+					if (currentClickEvent=="PlacingNandGate"){
+						c.globalAlpha=0.5;
+						c.fillRect(this.x,this.y,32,32);
+						c.globalAlpha=1;
+					}
+				}
+				this.exec = function(){
+					if (isClicking==true){
+						var mposxrnd16 = Math.floor(mouse_x/16)*16;
+						var mposyrnd16 = Math.floor(mouse_y/16)*16;
+						var objid = getObjIdAt(mposxrnd16,mposyrnd16);
+						if (mouse_x<cWidth-32){
+							if (currentClickEvent=="PlacingNandGate"){
+								if (objid==-1){
+									objects[objects.length] = new NANDGateClass(mposxrnd16,mposyrnd16);
+								}
+							}
+						}
+					}
+				}
+			}
+			function placeOrGateButton(buttonx,buttony){//place or gate button
+				this.extending = superButton;
+				this.extending();//using the superGate superclass
+				this.x=buttonx;
+				this.y=buttony;
+				this.img.src = "orgateimgs/orgate0.png";
+				this.name = "OR gate";
+				this.description = "Returns true if either or both inputs are true.";
+
+				this.clickEvent = function(){
+					currentClickEvent="PlacingOrGate";
+				}
+				this.draw = function(){
+					c.drawImage(this.img,this.x,this.y,32,32);
+					//green +
+					c.fillStyle="rgb(93, 255, 0)";
+					c.fillRect(this.x+22,this.y+25,8,2);
+					c.fillRect(this.x+25,this.y+22,2,8);
+					c.fillStyle="rgb(0,0,0)";
+					if (currentClickEvent=="PlacingOrGate"){
+						c.globalAlpha=0.5;
+						c.fillRect(this.x,this.y,32,32);
+						c.globalAlpha=1;
+					}
+				}
+				this.exec = function(){
+					if (isClicking==true){
+						var mposxrnd16 = Math.floor(mouse_x/16)*16;
+						var mposyrnd16 = Math.floor(mouse_y/16)*16;
+						var objid = getObjIdAt(mposxrnd16,mposyrnd16);
+						if (mouse_x<cWidth-32){
+							if (currentClickEvent=="PlacingOrGate"){
+								if (objid==-1){
+									objects[objects.length] = new ORGateClass(mposxrnd16,mposyrnd16);
+								}
+							}
+						}
+					}
+				}
+			}
+			function placeXnorGateButton(buttonx,buttony){//place xnor gate button
+				this.extending = superButton;
+				this.extending();//using the superGate superclass
+				this.x=buttonx;
+				this.y=buttony;
+				this.img.src = "xnorgateimgs/xnorgate0.png";
+				this.name = "XNOR gate";
+				this.description = "Returns true if both inputs are the same.";
+
+				this.clickEvent = function(){
+					currentClickEvent="PlacingXnorGate";
+				}
+				this.draw = function(){
+					c.drawImage(this.img,this.x,this.y,32,32);
+					//green +
+					c.fillStyle="rgb(93, 255, 0)";
+					c.fillRect(this.x+22,this.y+25,8,2);
+					c.fillRect(this.x+25,this.y+22,2,8);
+					c.fillStyle="rgb(0,0,0)";
+					if (currentClickEvent=="PlacingXnorGate"){
+						c.globalAlpha=0.5;
+						c.fillRect(this.x,this.y,32,32);
+						c.globalAlpha=1;
+					}
+				}
+				this.exec = function(){
+					if (isClicking==true){
+						var mposxrnd16 = Math.floor(mouse_x/16)*16;
+						var mposyrnd16 = Math.floor(mouse_y/16)*16;
+						var objid = getObjIdAt(mposxrnd16,mposyrnd16);
+						if (mouse_x<cWidth-32){
+							if (currentClickEvent=="PlacingXnorGate"){
+								if (objid==-1){
+									objects[objects.length] = new XNORGateClass(mposxrnd16,mposyrnd16);
+								}
+							}
+						}
+					}
+				}
+			}
+			function placeXorGateButton(buttonx,buttony){//place xor gate button
+				this.extending = superButton;
+				this.extending();//using the superGate superclass
+				this.x=buttonx;
+				this.y=buttony;
+				this.img.src = "xorgateimgs/xorgate0.png";
+				this.name = "XOR gate";
+				this.description = "Returns if the inputs arent the same.";
+
+				this.clickEvent = function(){
+					currentClickEvent="PlacingXorGate";
+				}
+				this.draw = function(){
+					c.drawImage(this.img,this.x,this.y,32,32);
+					//green +
+					c.fillStyle="rgb(93, 255, 0)";
+					c.fillRect(this.x+22,this.y+25,8,2);
+					c.fillRect(this.x+25,this.y+22,2,8);
+					c.fillStyle="rgb(0,0,0)";
+					if (currentClickEvent=="PlacingXorGate"){
+						c.globalAlpha=0.5;
+						c.fillRect(this.x,this.y,32,32);
+						c.globalAlpha=1;
+					}
+				}
+				this.exec = function(){
+					if (isClicking==true){
+						var mposxrnd16 = Math.floor(mouse_x/16)*16;
+						var mposyrnd16 = Math.floor(mouse_y/16)*16;
+						var objid = getObjIdAt(mposxrnd16,mposyrnd16);
+						if (mouse_x<cWidth-32){
+							if (currentClickEvent=="PlacingXorGate"){
+								if (objid==-1){
+									objects[objects.length] = new XORGateClass(mposxrnd16,mposyrnd16);
+								}
+							}
+						}
+					}
+				}
+			}
+			function placeSoundTileButton(buttonx,buttony){//place sound tile button
+				this.extending = superButton;
+				this.extending();//using the superGate superclass
+				this.x=buttonx;
+				this.y=buttony;
+				this.img.src = "soundtileimgs/soundTileImg0.png";
+				this.name = "Sound tile";
+				this.description = "Plays a sound when powered from any side (Rotate to change note).";
+
+				this.clickEvent = function(){
+					currentClickEvent="PlacingSoundTile";
+				}
+				this.draw = function(){
+					c.drawImage(this.img,this.x,this.y,32,32);
+					//green +
+					c.fillStyle="rgb(93, 255, 0)";
+					c.fillRect(this.x+22,this.y+25,8,2);
+					c.fillRect(this.x+25,this.y+22,2,8);
+					c.fillStyle="rgb(0,0,0)";
+					if (currentClickEvent=="PlacingSoundTile"){
+						c.globalAlpha=0.5;
+						c.fillRect(this.x,this.y,32,32);
+						c.globalAlpha=1;
+					}
+				}
+				this.exec = function(){
+					if (isClicking==true){
+						var mposxrnd16 = Math.floor(mouse_x/16)*16;
+						var mposyrnd16 = Math.floor(mouse_y/16)*16;
+						var objid = getObjIdAt(mposxrnd16,mposyrnd16);
+						if (mouse_x<cWidth-32){
+							if (currentClickEvent=="PlacingSoundTile"){
+								if (objid==-1){
+									objects[objects.length] = new soundTileClass(mposxrnd16,mposyrnd16);
+								}
+							}
+						}
+					}
+				}
+			}
+			function rotateButton(buttonx,buttony){//button to rotate objects
+				this.extending = superButton;
+				this.extending();//using the superGate superclass
+				this.x=buttonx;
+				this.y=buttony;
+				this.img.src = "rotatebutton.png";
+				this.name = "Rotate";
+				this.description = "Click on an object to rotate it.";
+
+				this.clickEvent = function(){
+					currentClickEvent="Rotate";
+				}
+				this.draw = function(){
+					c.drawImage(this.img,this.x,this.y,32,32);
+					if (currentClickEvent=="Rotate"){
+						c.globalAlpha=0.5;
+						c.fillRect(this.x,this.y,32,32);
+						c.globalAlpha=1;
+					}
+				}
+				this.exec = function(){
+					if (isClicking==true){
+						var mposxrnd16 = Math.floor(mouse_x/16)*16;
+						var mposyrnd16 = Math.floor(mouse_y/16)*16;
+						var objid = getObjIdAt(mposxrnd16,mposyrnd16);
+						if (mouse_x<cWidth-32){
+							if (currentClickEvent=="Rotate"){
+								if (objid!=-1){
+									if (objects[objid].rotation<objects[objid].variants){
+										objects[objid].rotation+=1;
+									}else{
+										objects[objid].rotation=0;
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			//tools
+			function timerClass(timeIntervalMS){//timer class
+				this.oldTime = new Date();//get the time of creation
+				this.interval = timeIntervalMS;//get the time until it is triggered
+				this.accum = 0;//number of ms since last trigger
+				this.isReady = function(){//method to check if ready
+					var curTime = new Date();
+					var delta = curTime - this.oldTime;
+
+					this.accum += delta;
+					this.oldTime = curTime;
+					if (this.accum > this.interval){
+						this.accum = 0;
+						return true;
+					}
+					else{
+						return false;
+					}
+				}
+			}
+			function getRandomInt(min,max){//return random integer between min and max inclusive
+				return Math.floor(Math.random()*(max-min+1))+min;
+			}
+			function CreateMenuObjects(){//menu objects
+				objects[objects.length] = new destroyButtonClass(cWidth-32,0);
+				objects[objects.length] = new placeWireButtonClass(cWidth-32,32);
+				objects[objects.length] = new placeCrossGateButton(cWidth-32,64);
+				objects[objects.length] = new placeSwitchButtonClass(cWidth-32,96);
+				objects[objects.length] = new placeDiodeGateButton(cWidth-32,128);
+				objects[objects.length] = new placeNotGateButton(cWidth-32,160);
+				objects[objects.length] = new placeAndGateButton(cWidth-32,192);
+				objects[objects.length] = new placeOrGateButton(cWidth-32,224);
+				objects[objects.length] = new placeRndGateButton(cWidth-32,256);
+				objects[objects.length] = new placeNorGateButton(cWidth-32,288);
+				objects[objects.length] = new placeXorGateButton(cWidth-32,320);
+				objects[objects.length] = new placeXnorGateButton(cWidth-32,352);
+				objects[objects.length] = new placeNandGateButton(cWidth-32,384);
+				objects[objects.length] = new placeSoundTileButton(cWidth-32,416);
+
+				objects[objects.length] = new rotateButton(cWidth-32,704);
+				objects[objects.length] = new oneTickbuttonclass(cWidth-32,736);
+				objects[objects.length] = new RTsimbuttonclass(cWidth-32,768);
+			}
+			function load(level){//function to load a level from a string
+				//id:xpos:ypos:rot
+				var objectsarr = level.split(";");//split the objects from the string
+				for(var i=0;i<objectsarr.length-1;i++){//for every objects in the string
+					var dataarr = objectsarr[i].split(",");//split it into values
+					var _constructor = eval(dataarr[0]);//get the constructor
+					var objlength = objects.length;//get the id of the to be objects
+					objects[objects.length] = new _constructor(Number(dataarr[1]),Number(dataarr[2]));//create the object
+					objects[objlength].rotation = Number(dataarr[3]);//set the rotation of the object
+				}
+			}
+			function compile(){//function to group every wire and run each logic objects oncompile
+				//reset all groups (to prevent legacy groups and infinite loops while merging groups)
+				var maxGroups=0;
+				for(var i=1;i<objects.length;i++){
+					if (objects[i].constructor.name=="wireClass"){//if it is a wire
+						objects[i].group=-1;
+					}
+				}
+				//create the groups and add the wires to it
+				for(var i=0;i<objects.length;i++){//for every object
+					if (objects[i].constructor.name=="wireClass"){//if it is a wire
+
+						if (objects[i].group==-1){//if it doesnt have a group
+							//create a new group
+							objects[i].group=++maxGroups;//assign a new group
+							if (groupspower[objects[i].group]==undefined){//define the group if it is new
+								groupspower[objects[i].group]=false;
+							}
+							//spread the group(s)
+							spreadGroups();
+						}
+					}
+				}
+
+				//handle the everything else compile
+				for(var i=0;i<objects.length;i++){//for every object
+					if (objects[i].type=="logic"){
+						objects[i].onCompile();
+					}
+				}
+			}
+			function runTick(){//function to use the previous calculation of logic gates
+				//figure out which gates should output
+				for(var i=0;i<objects.length;i++){
+					if (objects[i].type=="logic"){
+						objects[i].doNextCalc();
+					}
+				}
+
+				//reset all groups
+				for(var i=0;i<groupspower.length;i++){//reset the powered state
+					groupspower[i]=false;
+				}
+
+				//apply the outputs
+				for(var i=0;i<objects.length;i++){
+					if (objects[i].type=="logic"){
+						objects[i].doOutput();
+					}
+				}
+			}
+			function getObjIdAt(x,y){//returns the at the given position if one exists, otherwise returns negative
+				for(var i=0;i<objects.length;i++){
+					if (objects[i].x==x && objects[i].y==y){
+						return i;
+					}
+				}
+				return -1;
+			}
+			function spreadGroups(){//function to set all adjacent wires/crosses into the same group
+				var didSpread;
+				do{//until there is nothing to spread
+					didSpread=false;
+					for(var i=0;i<objects.length;i++){//with every object
+						if (objects[i].constructor.name=="wireClass"){//that is a wire
+							if(objects[i].group!=-1){//with a group
+								var dospread = function(dirx,diry){//create a function
+									var objid = getObjIdAt(objects[i].x+dirx,objects[i].y+diry);//get the object at the given position
+									if (objid!=-1){//that has an object to its right
+										if (objects[objid].constructor.name=="wireClass"){
+											if (objects[objid].group!=objects[i].group){//that isnt in its group already
+												objects[objid].group=objects[i].group;//set that right object to its group
+												didSpread = true;
+											}
+										}else if (objects[objid].constructor.name=="crossGateClass"){//handle cross gate recursion
+											if (!(dirx<-16 || dirx>16 || diry<-16 || diry>16)){//no >2x recursion
+												if (dirx!=0){
+													if (dirx>0){
+														dospread(32,0);
+													}else{
+														dospread(-32,0);
+													}
+												}else{
+													if (diry>0){
+														dospread(0,32);
+													}else{
+														dospread(0,-32);
+													}
+												}
+											}
+										}
+									}
+								}
+
+								dospread(16,0);//spread right
+								dospread(-16,0);//spread left
+								dospread(0,-16);//spread up
+								dospread(0,16);//spread down
+							}
+						}
+					}
+				}while(didSpread==true);
+			}
+
+			// Initializes entire game framework. This method should only be called
+			// once, by the body onload event handler.
+			function gameFrameworkInit(){
+				// Initialize key arrays
+				for (i = 0; i < 256; i++){
+					curkeys[i] = false;
+					newkeys[i] = false;
+				}
+
+				// Initialize global variables for canvas
+				c = myCanvas.getContext('2d');
+				cWidth = myCanvas.width;
+				cHeight = myCanvas.height = myCanvas.width-32;//set cHeight to canvas height to the width minus the menu
+
+				CreateMenuObjects();
+
+				// Start listeners for getting keyboard state
+				window.addEventListener('keydown',function(e){
+					if (!curkeys[e.keyCode]){
+						curkeys[e.keyCode] = true;
+						newkeys[e.keyCode] = true;
+					}
+				 });
+
+				window.addEventListener('keyup',function(e){
+					curkeys[e.keyCode] = false;
+				});
+
+				// Schedule the update function to be called right before the next repaint.
+				// (At the end of the update function, it will schedule itself to be called
+				// again before the NEXT repaint, and so on.
+				window.requestAnimationFrame(gameUpdate);
+			}
+
+			function gameUpdate(){
+				//handle clicking on right side buttons (and special cases like rotating and switches)
+				if (isClicking==true){
+					if (mouse_x>cWidth-32){//if clicking a button
+						var btnobjid = getObjIdAt(cWidth-32,Math.floor(mouse_y/32)*32);//get the button id
+						if (btnobjid!=-1){//if there is a button
+							objects[btnobjid].clickEvent();//execute the button click event
+						}
+					}else if (currentClickEvent!="Rotate"){//if clicking elsewhere (and not rotating objects)
+						var objid = getObjIdAt(Math.floor(mouse_x/16)*16,Math.floor(mouse_y/16)*16);//get the objects id
+						if (objid!=-1){//if there is an object
+							if (objects[objid].constructor.name="TswitchClass"){//if a switch was clicked on
+								objects[objid].isOn=!objects[objid].isOn;//toggle the switch
+							}
+						}
+					}
+				}
+
+				//a tick event exclusivly for buttons
+				for(var i=0;i<objects.length;i++){//for every objects
+					if (objects[i].type=="button"){//that is a button
+						objects[i].exec();//run its code
+					}
+				}
+
+				//handle key shortcuts
+				if (newkeys[82]){//if press r
+					currentClickEvent="Rotate";//set clickevent to rotate
+				}else if (newkeys[68]){//if press d
+					currentClickEvent="Destroying";//set clickevent to destory
+				}else if (newkeys[32]){//if press space
+					currentClickEvent="Nothing";//set click event to nothing
+				}else if (newkeys[87]){//if press w
+					currentClickEvent="PlacingWire";//set click even to placing wire
+				}else if (newkeys[83]){//if press s
+					currentClickEvent="PlacingSwitch";
+				}else if (newkeys[65]){//if press a
+					currentClickEvent="PlacingSoundTile";
+				}else if (newkeys[67]){//if press c
+					currentClickEvent="PlacingCrossGate";
+				}
+
+				if (newkeys[13]){showdebug=!showdebug;}//press enter to toggle debug mode (shows wires groups)
+
+				//handle save/load
+				if (newkeys[219]){//if press [ (save)
+					var output = "";
+					for(var i=objects.length-1;i>=0;i--){
+						if (objects[i].type!="button"){
+							output += objects[i].constructor.name+","+objects[i].x+","+objects[i].y+","+objects[i].rotation+";";
+						}
+					}
+					console.log(output);
+					window.alert("Your level data has been printed to the console!");
+				}else if (newkeys[221]){//if press ] (load)
+					try{
+						//clear existing objects
+						for(var i=objects.length-1;i>=0;i--){
+							if (objects[i].type!="button"){
+								objects.splice(i,1);
+							}
+						}
+						//load the new level
+						load(window.prompt("What would you like to load?"));
+					}catch(err){
+						window.alert("There was an error loading the given input! ("+err+").");
+					}
+				}
+
+				//handle if the sim is running full speed
+				if (simrunning==true){//if running at full speed (20 ticks per second)
+					if (tickTimer.isReady()){//if it is time to run the tick
+						compile();//compile the wires and logic
+						runTick();//run the tick
+					}
+				}
+
+				// Reset newkeys
+				for (var i=0; i<256; i++){
+					newkeys[i] = false;
+				}
+				isClicking=false;//reset the click
+
+				// At the end of the update function, repaint the screen
+				gameDraw();
+
+				// Last thing the update function does is to schedule itself to be called
+				// again before the next repaint
+				window.requestAnimationFrame(gameUpdate);
+			}
+
+			function gameDraw(){
+				// Clear the canvas before we draw the current frame
+				c.clearRect(0,0,cWidth,cHeight);
+
+				//grid
+				for(var b=0;b<cHeight/16;b++){
+					c.fillRect(0,b*16,cWidth-32,1);
+				}
+				for(var b=0;b<cWidth/16-1;b++){
+					c.fillRect(b*16,0,1,cHeight);
+				}
+
+				//draw objects
+				for(var i=0;i<objects.length;i++){
+					objects[i].draw();
+				}
+
+				//place preview
+				if (mouse_x<cWidth-32){//if mouse is over grid
+					c.globalAlpha = 0.2;
+					c.fillStyle="rgb(255, 238, 0)";
+					c.fillRect(Math.floor(mouse_x/16)*16,Math.floor(mouse_y/16)*16,16,16);
+					c.fillStyle="rgb(0,0,0)";
+					c.globalAlpha = 1;
+				}
+
+				//draw button tooltips
+				var btnobjid = getObjIdAt(Math.floor(mouse_x/32)*32,Math.floor(mouse_y/32)*32);//get the button id
+				if (btnobjid!=-1){
+					if (objects[btnobjid].type=="button"){//that is a button
+						objects[btnobjid].drawTooltip();//draw the tooltip
+					}
+				}
+			}
+
+		</script>
+	</head>
+	<body onload="gameFrameworkInit()">
+		<canvas id="myCanvas" width="832" onmousemove="
+			mouse_x=event.clientX;
+			mouse_y=event.clientY;
+		" onclick="isClicking=true;"></canvas>
+	</body>
+</html>
