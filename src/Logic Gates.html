@@ -25,7 +25,7 @@
 			var currentClickEvent = "Nothing";//the event that happens when you dclick
 			var tickTimer = new timerClass(50);//timer that triggers ever 1/20th of a second
 			var showdebug = false;//when true the debug information is shown
-			
+
 			//classes for logic gates
 			function superGate(){//super class for logic gates (mostly for organization)
 				this.x;//gate's x position
@@ -59,15 +59,15 @@
 				this.y=gatey;
 				this.variants=6;//has 1 variant (sofar)
 				this.waspowered = false;
-				this.notes = ["a","b","c","d","e","f","g"];
-				this.note = new Audio("soundtilesounds/"+this.notes[this.rotation]+".wav");
+				this.notes = ["a","b","c","d","e","f","g"]; //note order: g, a, b, c, d, e, f
+				this.note = new Audio("assets/sounds/soundtilesounds/"+this.notes[this.rotation]+".wav");
 				this.currentNote = this.notes[this.rotation];
 
 				this.draw = function(){
-					this.img.src = "soundtileimgs/soundTileImg"+this.rotation+".png";////get the image corrisponding to the rotation
+					this.img.src = "assets/textures/circuits/soundTile/soundTileImg"+this.rotation+".png";////get the image corrisponding to the rotation
 					c.drawImage(this.img,this.x,this.y,16,16);//draw the image
 					if (this.currentNote!=this.notes[this.rotation]){
-						this.note = new Audio("soundtilesounds/"+this.notes[this.rotation]+".wav");
+						this.note = new Audio("assets/sounds/soundtilesounds/"+this.notes[this.rotation]+".wav");
 						this.currentNote = this.notes[this.rotation];
 					}
 				}
@@ -126,7 +126,7 @@
 				this.willoutput[0]=false;
 				this.variants=3;//has 4 variants
 				this.draw = function(){
-					this.img.src = "assets/circuits/notGate.png"
+					this.img.src = "assets/textures/circuits/notGate.png"
 					drawRot(this.img, this.x, this.y, this.rotation*90)
 				}
 				this.doNextCalc = function(){//figure out what it will do when doouput is run
@@ -182,7 +182,7 @@
 				this.willoutput[0]=false;
 				this.variants=3;//has 4 variants
 				this.draw = function(){
-					this.img.src = "assets/circuits/rndGate.png"
+					this.img.src = "assets/textures/circuits/rndGate.png"
 					drawRot(this.img, this.x, this.y, this.rotation*90)
 				}
 				this.doNextCalc = function(){//figure out what it will do when doouput is run
@@ -240,7 +240,7 @@
 				this.variants=3;//has 4 variants
 				this.willoutput[0]=false;
 				this.draw = function(){
-					this.img.src = "assets/circuits/diodeGate.png"
+					this.img.src = "assets/textures/circuits/diodeGate.png"
 					drawRot(this.img, this.x, this.y, this.rotation*90)
 				}
 				this.doNextCalc = function(){//figure out what it will do when doouput is run
@@ -297,7 +297,7 @@
 				this.willoutput[0]=false;
 
 				this.draw = function(){
-					this.img.src = "assets/circuits/andGate.png"
+					this.img.src = "assets/textures/circuits/andGate.png"
 					drawRot(this.img, this.x, this.y, this.rotation*90)
 				}
 				this.doNextCalc = function(){//figure out what it will do when dooutput is run
@@ -364,7 +364,7 @@
 				this.willoutput[0]=false;
 
 				this.draw = function(){
-					this.img.src = "assets/circuits/nandGate.png"
+					this.img.src = "assets/textures/circuits/nandGate.png"
 					drawRot(this.img, this.x, this.y, this.rotation*90)
 				}
 				this.doNextCalc = function(){//figure out what it will do when dooutput is run
@@ -431,7 +431,7 @@
 				this.willoutput[0]=false;
 
 				this.draw = function(){
-					this.img.src = "assets/circuits/norGate.png";//set the image corrisponding to its rotation
+					this.img.src = "assets/textures/circuits/norGate.png";//set the image corrisponding to its rotation
 					drawRot(this.img, this.x, this.y, this.rotation*90)
 				}
 				this.doNextCalc = function(){//figure out what it will do when dooutput is run
@@ -497,7 +497,7 @@
 				this.willoutput[0]=false;
 
 				this.draw = function(){
-					this.img.src = "assets/circuits/orGate.png"
+					this.img.src = "assets/textures/circuits/orGate.png"
 					drawRot(this.img, this.x, this.y, this.rotation*90)
 				}
 				this.doNextCalc = function(){//figure out what it will do when dooutput is run
@@ -564,7 +564,7 @@
 				this.willoutput[0]=false;
 
 				this.draw = function(){
-					this.img.src = "assets/circuits/xnorGate.png";//set the image corrisponding to its rotation
+					this.img.src = "assets/textures/circuits/xnorGate.png";//set the image corrisponding to its rotation
 					drawRot(this.img, this.x, this.y, this.rotation*90)
 				}
 				this.doNextCalc = function(){//figure out what it will do when dooutput is run
@@ -631,7 +631,7 @@
 				this.willoutput[0]=false;
 
 				this.draw = function(){
-					this.img.src = "assets/circuits/xorGate.png";
+					this.img.src = "assets/textures/circuits/xorGate.png";
 					drawRot(this.img, this.x, this.y, this.rotation*90)
 				}
 				this.doNextCalc = function(){//figure out what it will do when dooutput is run
@@ -717,7 +717,7 @@
 				this.y=gatey;
 				this.img=new Image();
 				this.type="wire";
-				this.img.src="crossGate.png";
+				this.img.src="assets/textures/circuits/crossGate.png";
 				this.draw = function(){
 					c.drawImage(this.img,this.x,this.y,16,16);//draw image
 				}
@@ -738,9 +738,9 @@
 
 				this.draw = function(){
 					if (this.isOn==false){
-						this.img.src="assets/circuits/SwitchOff.png";
+						this.img.src="assets/textures/circuits/SwitchOff.png";
 					}else{
-						this.img.src="assets/circuits/SwitchOn.png";
+						this.img.src="assets/textures/circuits/SwitchOn.png";
 					}
 					drawRot(this.img, this.x, this.y, this.rotation*90)
 				}
@@ -828,7 +828,7 @@
 				this.extending();//using the superGate superclass
 				this.x=buttonx;
 				this.y=buttony;
-				this.img.src = "deleteimg.png";
+				this.img.src = "assets/textures/tools/deleteimg.png";
 				this.name="Destroy";
 				this.description="Click on an object to remove it.";
 
@@ -864,7 +864,7 @@
 				this.extending();//using the superGate superclass
 				this.x=buttonx;
 				this.y=buttony;
-				this.img.src = "wire.png";
+				this.img.src = "assets/textures/circuits/wire.png";
 				this.name = "Wire";
 				this.description = "Moves a signal between circuts, can be used as an input and output.";
 
@@ -905,7 +905,7 @@
 				this.extending();//using the superGate superclass
 				this.x=buttonx;
 				this.y=buttony;
-				this.img.src = "assets/circuits/SwitchOff.png";
+				this.img.src = "assets/textures/circuits/SwitchOff.png";
 				this.name = "Switch";
 				this.description="Can be clicked on to turn off or on.";
 
@@ -957,9 +957,9 @@
 				this.draw = function(){
 					c.drawImage(this.img,this.x,this.y,32,32);
 					if (simrunning==true){
-						this.img.src = "stopsim.png";
+						this.img.src = "assets/textures/tools/stopsim.png";
 					}else{
-						this.img.src = "startsim.png";
+						this.img.src = "assets/textures/tools/startsim.png";
 					}
 				}
 				this.exec = function(){//just here to prevent errors
@@ -971,7 +971,7 @@
 				this.extending();//using the superGate superclass
 				this.x=buttonx;
 				this.y=buttony;
-				this.img.src = "onetick.png";
+				this.img.src = "assets/textures/tools/onetick.png";
 				this.name = "One tick button";
 				this.description = "Click to advance the simulation by one tick (1\\20th of a second).";
 
@@ -993,7 +993,7 @@
 				this.extending();//using the superGate superclass
 				this.x=buttonx;
 				this.y=buttony;
-				this.img.src = "crossGate.png";
+				this.img.src = "assets/textures/circuits/crossGate.png";
 				this.name = "Cross";
 				this.description = "Used to cross two wires over each other without delay.";
 
@@ -1033,7 +1033,7 @@
 				this.extending();//using the superGate superclass
 				this.x=buttonx;
 				this.y=buttony;
-				this.img.src = "assets/circuits/notGate.png";
+				this.img.src = "assets/textures/circuits/notGate.png";
 				this.name = "NOT gate";
 				this.description = "Returns true if the input is false.";
 
@@ -1073,7 +1073,7 @@
 				this.extending();//using the superGate superclass
 				this.x=buttonx;
 				this.y=buttony;
-				this.img.src = "assets/circuits/norGate.png";
+				this.img.src = "assets/textures/circuits/norGate.png";
 				this.name = "NOR gate";
 				this.description = "Returns true if both inputs are false.";
 
@@ -1113,7 +1113,7 @@
 				this.extending();//using the superGate superclass
 				this.x=buttonx;
 				this.y=buttony;
-				this.img.src = "assets/circuits/rndGate.png";
+				this.img.src = "assets/textures/circuits/rndGate.png";
 				this.name = "Random Gate";
 				this.description = "Returns true 50% of the time when input is true.";
 
@@ -1153,7 +1153,7 @@
 				this.extending();//using the superGate superclass
 				this.x=buttonx;
 				this.y=buttony;
-				this.img.src = "assets/circuits/diodeGate.png";
+				this.img.src = "assets/textures/circuits/diodeGate.png";
 				this.name = "Diode";
 				this.description = "Only returns true if the input is true.";
 
@@ -1193,7 +1193,7 @@
 				this.extending();//using the superGate superclass
 				this.x=buttonx;
 				this.y=buttony;
-				this.img.src = "assets/circuits/andGate.png";
+				this.img.src = "assets/textures/circuits/andGate.png";
 				this.name = "AND gate";
 				this.description = "Returns true if both inputs are true.";
 
@@ -1233,7 +1233,7 @@
 				this.extending();//using the superGate superclass
 				this.x=buttonx;
 				this.y=buttony;
-				this.img.src = "assets/circuits/nandGate.png";
+				this.img.src = "assets/textures/circuits/nandGate.png";
 				this.name = "NAND gate";
 				this.description = "Returns true unless both inputs are true.";
 
@@ -1273,7 +1273,7 @@
 				this.extending();//using the superGate superclass
 				this.x=buttonx;
 				this.y=buttony;
-				this.img.src = "assets/circuits/orGate.png";
+				this.img.src = "assets/textures/circuits/orGate.png";
 				this.name = "OR gate";
 				this.description = "Returns true if either or both inputs are true.";
 
@@ -1313,7 +1313,7 @@
 				this.extending();//using the superGate superclass
 				this.x=buttonx;
 				this.y=buttony;
-				this.img.src = "assets/circuits/xnorgate.png";
+				this.img.src = "assets/textures/circuits/xnorgate.png";
 				this.name = "XNOR gate";
 				this.description = "Returns true if both inputs are the same.";
 
@@ -1353,7 +1353,7 @@
 				this.extending();//using the superGate superclass
 				this.x=buttonx;
 				this.y=buttony;
-				this.img.src = "assets/circuits/xorgate.png";
+				this.img.src = "assets/textures/circuits/xorgate.png";
 				this.name = "XOR gate";
 				this.description = "Returns if the inputs arent the same.";
 
@@ -1393,7 +1393,7 @@
 				this.extending();//using the superGate superclass
 				this.x=buttonx;
 				this.y=buttony;
-				this.img.src = "soundtileimgs/soundTileImg0.png";
+				this.img.src = "assets/textures/circuits/soundTile/soundTileImg0.png";
 				this.name = "Sound tile";
 				this.description = "Plays a sound when powered from any side (Rotate to change note).";
 
@@ -1433,7 +1433,7 @@
 				this.extending();//using the superGate superclass
 				this.x=buttonx;
 				this.y=buttony;
-				this.img.src = "rotatebutton.png";
+				this.img.src = "assets/textures/tools/rotatebutton.png";
 				this.name = "Rotate";
 				this.description = "Click on an object to rotate it.";
 
@@ -1753,16 +1753,16 @@
 
 			function drawRot(img, x, y, rot){//draws the image at x,y, rotated rot degrees
 				var size = 16;
-				
+
 				c.translate(x+size/2, y+size/2)
 				c.rotate(rot*Math.PI/180);
 				c.translate(-1*(x+size/2), -1*(y+size/2))
-				
+
 				c.drawImage(img, x, y, 16, 16);//draw the image
-				
+
 				c.resetTransform();
 			}
-	
+
 			function gameDraw(){
 				// Clear the canvas before we draw the current frame
 				c.clearRect(0,0,cWidth,cHeight);
@@ -1797,8 +1797,8 @@
 					}
 				}
 			}
-			
-			
+
+
 
 		</script>
 	</head>
